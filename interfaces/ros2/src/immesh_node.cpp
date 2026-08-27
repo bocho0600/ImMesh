@@ -50,6 +50,11 @@ bool                         g_flag_pause = false;
 double                       g_LiDAR_frame_start_time = 0;
 FILE *                       g_fp_cost_time = nullptr;
 FILE *                       g_fp_lio_state = nullptr;
+// Referenced from the RGB-projection paths this node never exercises, but they still have
+// to resolve at link time. The values are ImMesh's own defaults.
+Common_tools::Timer          g_cost_time_logger;
+double                       g_maximum_pe_error = 40;
+double                       g_initial_camera_exp_tim = 1.0;
 
 namespace {
 
