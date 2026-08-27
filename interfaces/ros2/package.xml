@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>immesh_ros2</name>
+  <version>0.0.0</version>
+  <description>
+    ROS 2 node around ImMesh's incremental mesher, built without its LiDAR-inertial
+    odometry. Takes an accumulated world-frame point cloud and a pose to view it from,
+    and publishes the reconstructed surface as a TRIANGLE_LIST marker.
+  </description>
+
+  <maintainer email="Kelvin.Le@decoda.com">Kelvin Le</maintainer>
+  <license>GPLv2</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>pcl_conversions</depend>
+  <depend>libpcl-all-dev</depend>
+  <depend>eigen</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

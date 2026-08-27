@@ -38,10 +38,31 @@ different license.
  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  POSSIBILITY OF SUCH DAMAGE.
 */
+#ifdef IMMESH_STANDALONE
+/*** Build the mesher without the LIO half.
+ *
+ * voxel_mapping.hpp is ImMesh's own LiDAR odometry, and it drags in ROS 1 (roscpp,
+ * pcl_conversions) with it. This file needs none of that: everything it takes from that
+ * header is either a type that mesh_rec_geometry.hpp already defines
+ * (LiDAR_frame_pts_and_pose_vec, Global_map, Triangle_manager) or a tuning constant it
+ * declares extern below and someone else defines. mesh_rec_display.hpp is the OpenGL
+ * viewer, and only Common_tools helpers are used from it.
+ *
+ * So a consumer that has its own odometry -- which is the point of this build -- links the
+ * meshing core alone and supplies the constants itself. The default build is untouched.
+ ***/
+#include <pcl/filters/voxel_grid.h>
+
+#include "meshing/mesh_rec_geometry.hpp"
+#include "tools/tools_data_io.hpp"
+#include "tools/tools_thread_pool.hpp"
+#include "tools/tools_timer.hpp"
+#else
 #include "voxel_mapping.hpp"
 #include "meshing/mesh_rec_display.hpp"
 #include "meshing/mesh_rec_geometry.hpp"
 #include "tools/tools_thread_pool.hpp"
+#endif
 
 extern Global_map       g_map_rgb_pts_mesh;
 extern Triangle_manager g_triangles_manager;
@@ -325,6 +346,34 @@ void start_mesh_threads( int maximum_threads = 20 )
     }
 }
 
+/*** Queue a cloud with the viewpoint it was seen from.
+ *
+ * The body is reconstruct_mesh_from_pointcloud's, with the pose carried through instead of
+ * being pinned to the identity. That matters: the pose is what correct_triangle_index uses
+ * to decide which way a triangle faces, so an identity viewpoint on a cloud gathered from
+ * somewhere else leaves the surface facing an arbitrary direction. A consumer with its own
+ * odometry knows the real viewpoint and should say so.
+ ***/
+void append_frame_for_meshing( pcl::PointCloud< pcl::PointXYZI >::Ptr frame_pts,
+                               const Eigen::Quaterniond &pose_q, const Eigen::Vector3d &pose_t,
+                               double minimum_pts_distance )
+{
+    start_mesh_threads( g_maximum_thread_for_rec_mesh > 0 ? g_maximum_thread_for_rec_mesh : 20 );
+    if ( frame_pts == nullptr || frame_pts->points.size() == 0 )
+    {
+        return;
+    }
+    pcl::PointCloud< pcl::PointXYZI >::Ptr cloud_ds( new pcl::PointCloud< pcl::PointXYZI > );
+    pcl::VoxelGrid< pcl::PointXYZI >       sor;
+    sor.setInputCloud( frame_pts );
+    sor.setLeafSize( minimum_pts_distance, minimum_pts_distance, minimum_pts_distance );
+    sor.filter( *cloud_ds );
+
+    g_mutex_data_package_lock.lock();
+    g_rec_mesh_data_package_list.emplace_back( cloud_ds, pose_q, pose_t, g_frame_idx++ );
+    g_mutex_data_package_lock.unlock();
+}
+
 void reconstruct_mesh_from_pointcloud( pcl::PointCloud< pcl::PointXYZI >::Ptr frame_pts, double minimum_pts_distance )
 {
     start_mesh_threads();
@@ -374,6 +423,9 @@ std::vector< vec_4 > convert_pcl_pointcloud_to_vec( pcl::PointCloud< pcl::PointX
     return eigen_pt_vec;
 }
 
+#ifndef IMMESH_STANDALONE
+// Belongs to the LIO half: it is a Voxel_mapping method that happens to live in this file.
+// The standalone meshing build has no Voxel_mapping and no need for it.
 void Voxel_mapping::map_incremental_grow()
 {
     start_mesh_threads( m_meshing_maximum_thread_for_rec_mesh );
@@ -442,3 +494,5 @@ void Voxel_mapping::map_incremental_grow()
 #endif
     }
 }
+
+#endif  // IMMESH_STANDALONE
