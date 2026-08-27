@@ -48,8 +48,8 @@ int                          g_current_frame = -1;
 int                          g_enable_mesh_rec = 1;
 bool                         g_flag_pause = false;
 double                       g_LiDAR_frame_start_time = 0;
-FILE *                       g_fp_cost_time = nullptr;
-FILE *                       g_fp_lio_state = nullptr;
+// g_fp_cost_time and g_fp_lio_state are deliberately absent: mesh_rec_geometry.cpp defines
+// them itself, unlike everything above, which it only declares extern.
 // Referenced from the RGB-projection paths this node never exercises, but they still have
 // to resolve at link time. The values are ImMesh's own defaults.
 Common_tools::Timer          g_cost_time_logger;
