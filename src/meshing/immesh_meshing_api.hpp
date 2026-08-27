@@ -18,6 +18,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+#include <mutex>
 #include <string>
 
 #include "meshing/mesh_rec_geometry.hpp"
@@ -33,6 +34,18 @@ extern int                          g_current_frame;
 extern int                          g_enable_mesh_rec;
 extern bool                         g_flag_pause;
 extern int                          g_frame_idx;
+
+/*** The mesher's own locks, for a consumer that wants to read the mesh out while it is
+ * still being built.
+ *
+ * Enumerating triangles walks a hash map that the meshing thread inserts into, and reading
+ * a vertex position indexes a vector that it appends to; doing either unguarded is a
+ * use-after-free waiting for a rehash or a reallocation. g_mutex_reconstruct_mesh is held
+ * while triangles are inserted and g_mutex_append_map while points are appended, so a
+ * reader takes both.
+ ***/
+extern std::mutex g_mutex_reconstruct_mesh;
+extern std::mutex g_mutex_append_map;
 
 // --- entry points ---------------------------------------------------------------------
 

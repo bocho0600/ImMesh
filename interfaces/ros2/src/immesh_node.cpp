@@ -132,8 +132,20 @@ class ImMeshNode : public rclcpp::Node
 
     void onCloud( const sensor_msgs::msg::PointCloud2::SharedPtr msg )
     {
+        // Converted through PointXYZ on purpose: a map cloud carries geometry and nothing
+        // else, and asking PCL for PointXYZI when there is no intensity field logs a warning
+        // per message and leaves the channel uninitialised, which the mesher then reads.
+        pcl::PointCloud< pcl::PointXYZ > xyz;
+        pcl::fromROSMsg( *msg, xyz );
         pcl::PointCloud< pcl::PointXYZI >::Ptr cloud( new pcl::PointCloud< pcl::PointXYZI > );
-        pcl::fromROSMsg( *msg, *cloud );
+        cloud->points.resize( xyz.points.size() );
+        for ( size_t i = 0; i < xyz.points.size(); ++i )
+        {
+            cloud->points[ i ].x = xyz.points[ i ].x;
+            cloud->points[ i ].y = xyz.points[ i ].y;
+            cloud->points[ i ].z = xyz.points[ i ].z;
+            cloud->points[ i ].intensity = 0.f;
+        }
         if ( cloud->points.empty() )
         {
             return;
@@ -194,12 +206,20 @@ class ImMeshNode : public rclcpp::Node
 
     void publishMesh()
     {
-        // Triangles are kept per spatial region, so this comes back as a set per region
-        // rather than one flat list. The mutex argument is the manager's own; passing none
-        // takes the uncontended path, which is what we want from a timer that can simply
-        // publish the next one if it loses a race.
+        /*** Both locks, for the whole read.
+         *
+         * get_all_triangle_list walks the per-region hash map, and the meshing thread
+         * inserts into it; its own mutex argument only guards each inner copy, not the
+         * walk, so a rehash mid-iteration is a crash. Reading vertex positions then indexes
+         * m_rgb_pts_vec, which the same thread appends to. Held together rather than in
+         * turn so the triangles and the points they index cannot disagree.
+         ***/
         std::vector< Triangle_set > triangle_sets;
-        g_triangles_manager.get_all_triangle_list( triangle_sets );
+        {
+            std::lock_guard< std::mutex > mesh_lock( g_mutex_reconstruct_mesh );
+            g_triangles_manager.get_all_triangle_list( triangle_sets, nullptr, 0 );
+        }
+        std::lock_guard< std::mutex > map_lock( g_mutex_append_map );
         size_t n_triangles = 0;
         for ( const auto &set : triangle_sets )
         {
